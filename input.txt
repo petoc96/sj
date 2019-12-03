@@ -1,0 +1,13 @@
+begin
+    read(x, y);
+    variable := x + 12;
+    if true
+    then write(variable)
+    else write(y);
+end
+
+begin
+    a := 5;
+    b := 10;
+    c := 9456;
+end
