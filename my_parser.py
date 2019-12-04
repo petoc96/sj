@@ -1,266 +1,219 @@
-from error import ParserError, ErrorCode
-from token import TokenType
+from my_token import TokenType
+import logging
 
-
-class AST(object):
-    pass
-
-
-class Program(AST):
-    """Represents a 'BEGIN ... END' block"""
-
-    def __init__(self):
-        self.children = []
-
-
-class Assign(AST):
-    def __init__(self, left, op, right):
-        self.left = left
-        self.token = self.op = op
-        self.right = right
-
-
-class Var(AST):
-    """The Var node is constructed out of ID token."""
-
-    def __init__(self, token):
-        self.token = token
-        self.value = token.value
-
-
-class NoOp(AST):
-    pass
-
-
-class UnaryOp(AST):
-    def __init__(self, op, expr):
-        self.token = self.op = op
-        self.expr = expr
-
-
-class BinOp(AST):
-    def __init__(self, left, op, right):
-        self.left = left
-        self.token = self.op = op
-        self.right = right
-
-
-class Num(AST):
-    def __init__(self, token):
-        self.token = token
-        self.value = token.value
+logging.basicConfig(level=logging.INFO)
 
 
 class Parser(object):
     def __init__(self, lexer):
         self.lexer = lexer
-        # set current token to the first token taken from the input
         self.current_token = self.lexer.get_next_token()
 
     def get_next_token(self):
         return self.lexer.get_next_token()
 
-    def error(self, error_code, token):
-        raise ParserError(
-            error_code=error_code,
-            token=token,
-            message=f'{error_code.value} -> {token}',
-        )
-
-    def eat(self, token_type):
-        # compare the current token type with the passed token
-        # type and if they match then "eat" the current token
-        # and assign the next token to the self.current_token,
-        # otherwise raise an exception.
-        print('EXP', token_type, "CURR", self.current_token.type)
+    def process(self, token_type):
         if self.current_token.type == token_type:
+            logging.info('Parsing token: ' + str(self.current_token))
             self.current_token = self.get_next_token()
         else:
-            self.error(
-                error_code=ErrorCode.UNEXPECTED_TOKEN,
-                token=self.current_token,
-            )
+            logging.error('Unexpected token: ' + str(self.current_token) + '. Consider using token: ' + str(token_type))
+            exit()
 
-    def program_body(self):
-        """
-        compound_statement: BEGIN statement_list END
-        """
-        self.eat(TokenType.BEGIN)
-        nodes = self.statement_list()
-        self.eat(TokenType.END)
-
-        root = Program()
-        for node in nodes:
-            root.children.append(node)
-
-        return root
+    def program(self):
+        # program: BEGIN statement_list END
+        logging.info('Creating node PROGRAM')
+        self.process(TokenType.BEGIN)
+        self.statement_list()
+        self.process(TokenType.END)
+        logging.info('Leaving node PROGRAM')
 
     def statement_list(self):
-        """
-        statement_list : statement
-                       | statement statement_list
-        """
-        node = self.statement()
-        results = [node]
-
+        # statement_list : statement
+        #                | statement statement_list
+        logging.info('Creating node STATEMENT_LIST')
+        self.statement()
         while self.current_token.type == TokenType.SEMI:
-            self.eat(TokenType.SEMI)
-            results.append(self.statement())
-
-        if self.current_token.type == TokenType.ID:
-            self.error()
-
-        return results
+            self.process(TokenType.SEMI)
+            self.statement()
+        logging.info('Leaving node STATEMENT_LIST')
 
     def id_list(self):
-        """
-        id_list : variable
-                | variable id_list
-        """
-        node = self.variable()
-        results = [node]
-
+        # id_list : variable
+        #         | variable id_list
+        logging.info('Creating node ID_LIST')
+        self.ident()
         while self.current_token.type == TokenType.COMMA:
-            self.eat(TokenType.COMMA)
-            results.append(self.variable())
-
-        return results
+            self.process(TokenType.COMMA)
+            self.ident()
+        logging.info('Leaving node ID_LIST')
 
     def expr_list(self):
-        """
-        id_list : expr
-                | expr expr_list
-        """
-        node = self.expr()
-        results = [node]
-
+        # id_list : expr
+        #         | expr expr_list
+        logging.info('Creating node EXPR_LIST')
+        self.expr()
         while self.current_token.type == TokenType.COMMA:
-            self.eat(TokenType.COMMA)
-            results.append(self.expr())
-
-        return results
+            self.process(TokenType.COMMA)
+            self.expr()
+        logging.info('Leaving node EXPR_LIST')
 
     def statement(self):
-        """
-        statement : read_statement
-                  | write_statement
-                  | if_statement
-                  | assign_statement
-        """
+        # statement : read_statement
+        #           | write_statement
+        #           | if_statement
+        #           | assign_statement
+        logging.info('Creating node STATEMENT')
         if self.current_token.type == TokenType.READ:
-            node = self.read_statement()
+            self.read_statement()
         elif self.current_token.type == TokenType.WRITE:
-            node = self.write_statement()
+            self.write_statement()
         elif self.current_token.type == TokenType.IF:
-            node = self.if_statement()
+            self.if_statement()
         elif self.current_token.type == TokenType.ID:
-            node = self.assignment_statement()
+            self.assignment_statement()
+        logging.info('Leaving node STATEMENT')
+
+    def bfactor(self):
+        # bfactor : NOT bfactor
+        #         | ( bexpr )
+        #         | TRUE
+        #         | FALSE
+        logging.info('Creating node BFACTOR')
+        if self.current_token.type == TokenType.NOT:
+            self.process(TokenType.NOT)
+            self.bfactor()
+        elif self.current_token.type == TokenType.LPAREN:
+            self.process(TokenType.LPAREN)
+            self.bexpr()
+            self.process(TokenType.RPAREN)
+        elif self.current_token.type == TokenType.TRUE:
+            self.process(TokenType.TRUE)
+        elif self.current_token.type == TokenType.FALSE:
+            self.process(TokenType.FALSE)
         else:
-            node = self.empty()
-        return node
+            logging.error('Unexpected token: ' + str(self.current_token))
+            exit()
+        logging.info('Leaving node BFACTOR')
+
+    def bterm(self):
+        # bterm : bfactor
+        #      | bfactor AND bfactor
+        logging.info('Creating node BTERM')
+        self.bfactor()
+        while self.current_token.type == TokenType.AND:
+            self.process(TokenType.AND)
+            self.bfactor()
+        logging.info('Leaving node BTERM')
+
+    def bexpr(self):
+        # bexpr : bterm
+        #       | bterm OR bterm
+        logging.info('Creating node BEXPR')
+        self.bterm()
+        while self.current_token.type == TokenType.OR:
+            self.process(TokenType.OR)
+            self.bterm()
+
+    def if_statement(self):
+        # if_statement : IF bexpr THEN statement;
+        #              | IF bexpr THEN statement ELSE statement;
+        logging.info('Creating node IF_STATEMENT')
+        self.process(TokenType.IF)
+        self.bexpr()
+        self.process(TokenType.THEN)
+        self.statement()
+        self.process(TokenType.SEMI)
+        if self.current_token.type == TokenType.ELSE:
+            self.process(TokenType.ELSE)
+            self.statement()
+        logging.info('Leaving node IF_STATEMENT')
 
     def read_statement(self):
-        """
-        read_statement : READ ( id_list );
-        """
-        self.eat(TokenType.READ)
-        self.eat(TokenType.LPAREN)
-        nodes = self.id_list()
-        self.eat(TokenType.RPAREN)
-        self.eat(TokenType.SEMI)
-        # input(nodes)
+        # read_statement : READ ( id_list );
+        logging.info('Creating node READ_STATEMENT')
+        self.process(TokenType.READ)
+        self.process(TokenType.LPAREN)
+        self.id_list()
+        self.process(TokenType.RPAREN)
+        if self.current_token.type != TokenType.SEMI:
+            logging.error('Missing token: ' + str(TokenType.SEMI) + ' at position ' +
+                          str(self.current_token.line) + ':' + str(self.current_token.column-1))
+            exit()
+        logging.info('Leaving node READ_STATEMENT')
 
     def write_statement(self):
-        """
-        read_statement : READ ( id_list );
-        """
-        self.eat(TokenType.WRITE)
-        self.eat(TokenType.LPAREN)
-        nodes = self.expr_list()
-        self.eat(TokenType.RPAREN)
-        self.eat(TokenType.SEMI)
-        # print(nodes)
+        # read_statement : READ ( id_list );
+        logging.info('Creating node WRITE_STATEMENT')
+        self.process(TokenType.WRITE)
+        self.process(TokenType.LPAREN)
+        self.expr_list()
+        self.process(TokenType.RPAREN)
+        if self.current_token.type != TokenType.SEMI:
+            logging.error('Missing token: ' + str(TokenType.SEMI) + ' at position ' +
+                          str(self.current_token.line) + ':' + str(self.current_token.column-1))
+            exit()
+        logging.info('Leaving node WRITE_STATEMENT')
 
     def assignment_statement(self):
-        """
-        assignment_statement : variable ASSIGN expr
-        """
-        left = self.variable()
-        token = self.current_token
-        self.eat(TokenType.ASSIGN)
-        right = self.expr()
-        node = Assign(left, token, right)
-        return node
+        # assignment_statement : variable ASSIGN expr
+        logging.info('Creating node ASSIGN_STATEMENT')
+        self.ident()
+        self.process(TokenType.ASSIGN)
+        self.expr()
+        if self.current_token.type != TokenType.SEMI:
+            logging.error('Missing token: ' + str(TokenType.SEMI) + ' at position ' +
+                          str(self.current_token.line) + ':' + str(self.current_token.column-1))
+            exit()
+        logging.info('Leaving node ASSIGN_STATEMENT')
 
-    def variable(self):
-        """
-        variable : ID
-        """
-        node = Var(self.current_token)
-        self.eat(TokenType.ID)
-        return node
-
-    def empty(self):
-        """An empty production"""
-        return NoOp()
-
-    def term(self):
-        """term : factor ((MUL | INTEGER_DIV | FLOAT_DIV) factor)*"""
-        node = self.factor()
-
-        return node
+    def ident(self):
+        # variable : ID
+        logging.info('Creating node IDENT')
+        self.process(TokenType.ID)
+        logging.info('Leaving node IDENT')
 
     def factor(self):
-        """factor : PLUS  factor
-              | MINUS factor
-              | INTEGER
-              | LPAREN expr RPAREN
-              | variable
-        """
-        token = self.current_token
-        if token.type == TokenType.PLUS:
-            self.eat(TokenType.PLUS)
-            node = UnaryOp(token, self.factor())
-            return node
-        elif token.type == TokenType.MINUS:
-            self.eat(TokenType.MINUS)
-            node = UnaryOp(token, self.factor())
-            return node
-        elif token.type == TokenType.INTEGER:
-            self.eat(TokenType.INTEGER)
-            return Num(token)
-        elif token.type == TokenType.LPAREN:
-            self.eat(TokenType.LPAREN)
-            node = self.expr()
-            self.eat(TokenType.RPAREN)
-            return node
+        # factor : PLUS  number
+        #       | MINUS number
+        #       | number
+        #       | ( expr )
+        #       | variable
+        logging.info('Creating node FACTOR')
+        if self.current_token.type == TokenType.PLUS:
+            self.process(TokenType.PLUS)
+            self.process(TokenType.NUMBER)
+        elif self.current_token.type == TokenType.MINUS:
+            self.process(TokenType.MINUS)
+            self.process(TokenType.NUMBER)
+        elif self.current_token.type == TokenType.NUMBER:
+            self.process(TokenType.NUMBER)
+        elif self.current_token.type == TokenType.LPAREN:
+            self.process(TokenType.LPAREN)
+            self.expr()
+            self.process(TokenType.RPAREN)
         else:
-            node = self.variable()
-            return node
+            self.ident()
+        logging.info('Leaving node FACTOR')
 
     def expr(self):
-        """
-        expr   : term ((PLUS | MINUS) term)*
-        factor : INTEGER | LPAREN expr RPAREN
-        """
-        node = self.term()
-
+        # expr : factor
+        #      | factor op factor
+        logging.info('Creating node EXPRESSION')
+        self.factor()
         while self.current_token.type in (TokenType.PLUS, TokenType.MINUS):
             token = self.current_token
             if token.type == TokenType.PLUS:
-                self.eat(TokenType.PLUS)
+                self.process(TokenType.PLUS)
             elif token.type == TokenType.MINUS:
-                self.eat(TokenType.MINUS)
-
-            node = BinOp(left=node, op=token, right=self.term())
-
-        return node
+                self.process(TokenType.MINUS)
+            self.factor()
+        logging.info('Leaving node EXPRESSION')
 
     def parse(self):
-        node = self.program_body()
+        logging.info('Building parsing tree')
+        self.program()
         if self.current_token.type != TokenType.EOF:
-            print('NOT EOF')
-            self.error()
-
-        print('FINISH')
-        return node
+            logging.error('Unexpected token after end of program: ' + str(self.current_token))
+            exit()
+        logging.info('Finished parsing')

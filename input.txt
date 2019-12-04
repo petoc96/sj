@@ -5,9 +5,3 @@ begin
     then write(variable)
     else write(y);
 end
-
-begin
-    a := 5;
-    b := 10;
-    c := 9456;
-end

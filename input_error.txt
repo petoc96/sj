@@ -1,0 +1,7 @@
+begin
+    i := 10;
+    read(i);
+    if not true and
+    then
+        read(j);
+end

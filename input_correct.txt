@@ -1,0 +1,12 @@
+begin
+    variable := +10;
+    b := 55+46+a;
+    read(qwe);
+    if not true and (true and false) or true
+    then
+        read(a);
+    else
+        if true
+        then
+            a:=5;
+end
